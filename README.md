@@ -225,5 +225,6 @@
         ? Do you want to configure advanced settings? No
         ? Do you want to edit the local lambda function now? Yes
        
-    2. Заменить */amplify/backend/function/reactSampleLambda/src/index.js с помощью кода, представленного в [./lambda/index.js](https://github.com/sFablee/AWS_ChimeSDK_Amplify/blob/main/index.js). 
+    2. Заменить */amplify/backend/function/reactSampleLambda/src/index.js с помощью кода, представленного в 
+       [./lambda/index.js](https://github.com/sFablee/AWS_ChimeSDK_Amplify/blob/main/index.js). 
        Затем вернитесь к терминалу и нажмите Enter, чтобы завершить настройку.
