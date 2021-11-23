@@ -225,5 +225,178 @@
         ? Do you want to configure advanced settings? No
         ? Do you want to edit the local lambda function now? Yes
        
-    2. Заменить */amplify/backend/function/reactSampleLambda/src/index.js с помощью кода, представленного в файле [index.js](https://github.com/sFablee/AWS_ChimeSDK_Amplify/blob/main/index.js). 
-       Затем вернитесь к терминалу и нажмите Enter, чтобы завершить настройку.
+Заменить */amplify/backend/function/reactSampleLambda/src/index.js с помощью кода, представленного в файле [index.js](https://github.com/sFablee/AWS_ChimeSDK_Amplify/blob/main/index.js). 
+Затем вернитесь к терминалу и нажмите Enter, чтобы завершить настройку.
+
+    2. Добавление категории 'api' создаст GraphQL API в AWS AppSync. Добавьте категорию 'api' с помощью Amplify CLI и ответьте на следующие вопросы:
+        
+        $ amplify add api
+
+        ? Please select from one of the below mentioned services: GraphQL
+        ? Provide API name: reactSampleApi
+        ? Choose the default authorization type for the API: API key
+        ? Enter a description for the API key:
+        ? After how many days from now the API key should expire (1-365): 7
+        ? Do you want to configure advanced settings for the GraphQL API No, I am done.
+        ? Do you have an annotated GraphQL schema? No
+        ? Choose a schema template: Single object with fields (e.g., “Todo” with ID, name, description)
+
+        ? Do you want to edit the schema now? Yes
+        
+### Когда редактор откроется, замените файл схемы содержимым следующей схемы:
+        
+        type Meeting @model(mutations: {create: "createMeetingGraphQL", delete: "deleteMeetingGraphQL"}, subscriptions: null) @key(fields: ["title"]){
+          meetingId: String!
+          title: String!
+          data: String!
+        }
+
+        type Attendee @model(mutations: {create: "createAttendeeGraphQL", delete: "deleteAttendeeGraphQL"}, subscriptions: null) @key(fields: ["attendeeId"]){
+          attendeeId: String!
+          name: String!
+        }
+
+        type Query {
+          createChimeMeeting(title: String, name: String, region: String): Response @function(name: "reactSampleLambda-${env}")
+          joinChimeMeeting(meetingId: String, name: String): Response @function(name: "reactSampleLambda-${env}")
+          endChimeMeeting(meetingId: String): Response  @function(name: "reactSampleLambda-${env}")
+        }
+
+        type Response {
+          statusCode: String!
+          headers: String
+          body: String
+          isBase64Encoded: String
+        }
+        
+    3. Затем, чтобы перенести изменения в облако, выполните следующую команду - вы можете принять все значения по умолчанию в prompt:
+    
+        $ amplify push
+        
+    4. Наконец, измените политику IAM Role, включив в нее Amazon Chime Full Access, чтобы позволить вашей функции Lambda вызывать API Amazon Chime:
+        
+        - Перейдите в AWS Console, используя ту же учетную запись, которую вы использовали для настройки Amplify.
+        - Перейдите в раздел IAM
+        - Нажмите на Роли в боковом меню.
+        - Найдите созданную роль и щелкните по ее названию - {projectName}LambdaRoleXXX-{environment}
+        - Нажмите на кнопку "Attach Policies".
+        - Введите в поле поиска: AmazonChimeFullAccess
+        - Нажмите на флажок для: AmazonChimeFullAccess
+        - Нажмите на "Attach Policy" в правом нижнем углу экрана
+ 
+### Подключение фронт-энда к бэк-энду с помощью GraphQL
+
+    После того, как вы перешли на учетную запись AWS, вы можете проверить сгенерированные API GraphQL внутри каталога ./src/graphql/*. 
+    Вы должны увидеть ./src/graphql/mutations.js и ./src/graphql/queries.js. Эти файлы содержат API GraphQL, которые были сгенерированы программой 
+    Amplify, которые вы теперь можете использовать в своем приложении
+    
+    1. Создайте новый каталог ./src/utils/
+    2. Создайте новый файл api.ts в разделе ./src/utils/api.ts. Скопируйте приведенный ниже код в новый файл:
+    
+        import { API, graphqlOperation } from 'aws-amplify';
+        import { createAttendeeGraphQL, createMeetingGraphQL, deleteMeetingGraphQL } from '../graphql/mutations';
+        import { createChimeMeeting, getAttendee, endChimeMeeting, getMeeting, joinChimeMeeting } from '../graphql/queries';
+
+
+        export async function createMeeting(title: string, attendeeName: string, region: string) {
+          const joinInfo: any = await API.graphql(graphqlOperation(createChimeMeeting, {title: title, name: attendeeName, region: region }));
+          const joinInfoJson = joinInfo.data.createChimeMeeting;
+          const joinInfoJsonParse = JSON.parse(joinInfoJson.body);
+          return joinInfoJsonParse;
+        }
+
+        export async function joinMeeting(meetingId: string, name: string) {
+          const joinInfo: any = await API.graphql(graphqlOperation(joinChimeMeeting, {meetingId: meetingId, name: name}));
+          const joinInfoJson = joinInfo.data.joinChimeMeeting;
+          const joinInfoJsonParse = JSON.parse(joinInfoJson.body);
+          return joinInfoJsonParse;
+        }
+
+        export async function endMeeting(meetingId: string) {
+          const endInfo: any = await API.graphql(graphqlOperation(endChimeMeeting, {meetingId: meetingId}));
+          const endInfoJson = endInfo.data.endChimeMeeting;
+          await API.graphql(graphqlOperation(deleteMeetingGraphQL, {input: {title: meetingId}}));
+          return endInfoJson;
+        }
+
+        export async function addMeetingToDB(title: string, meetingId: string, meetingData: string) {
+          await API.graphql(graphqlOperation(createMeetingGraphQL, {input: {title: title, meetingId: meetingId, data: meetingData, }}));
+        }
+
+        export async function addAttendeeToDB(attendeeID: string, attendeeName: string) {
+          await API.graphql(graphqlOperation(createAttendeeGraphQL, {input: {attendeeId: attendeeID, name: attendeeName }}));
+        }
+
+        export async function getMeetingFromDB(title: string) {
+          const meetingInfo = await API.graphql(graphqlOperation(getMeeting, {title: title }));
+          return meetingInfo;
+        }
+
+        export async function getAttendeeFromDB(attendeeId: string) {
+          const attendeeInfo = await API.graphql(graphqlOperation(getAttendee, {attendeeId: attendeeId }));
+          return attendeeInfo;
+        }
+        
+    3. Откройте файл ./src/components/MeetingForm.tsx. Скопируйте эту реализацию функции getAttendeeCallback и joinMeeting в поле 
+       joinMeeting в ./src/components/MeetingForm.tsx.
+       
+        const clickedJoinMeeting = async (event: FormEvent) => {
+          event.preventDefault();
+
+          meetingManager.getAttendee = getAttendeeCallback();
+          const title = meetingTitle.trim().toLocaleLowerCase();
+          const name = attendeeName.trim();
+
+        // Fetch the Meeting via AWS AppSync - if it exists, then the meeting has already
+        // been created, and you just need to join it - you don't need to create a new meeting
+          const meetingResponse: any = await getMeetingFromDB(title);
+          const meetingJson = meetingResponse.data.getMeeting;
+          try {
+            if (meetingJson) {
+              const meetingData = JSON.parse(meetingJson.data);
+              const joinInfo = await joinMeeting(meetingData.MeetingId, name);
+              await addAttendeeToDB(joinInfo.Attendee.AttendeeId, name);
+
+              await meetingManager.join({
+                meetingInfo: meetingData,
+                attendeeInfo: joinInfo.Attendee
+              });
+            } else {
+              const joinInfo = await createMeeting(title, name, 'us-east-1');
+              await addMeetingToDB(title, joinInfo.Meeting.MeetingId, JSON.stringify(joinInfo.Meeting));       await addAttendeeToDB(joinInfo.Attendee.AttendeeId, name);
+
+              await meetingManager.join({
+                meetingInfo: joinInfo.Meeting,
+                attendeeInfo: joinInfo.Attendee
+              });
+            }
+          } catch (error) {
+            console.log(error);
+          }
+
+          // At this point you can let users setup their devices, or start the session immediately
+          await meetingManager.start();
+        };
+        
+    4. Теперь вы можете запустить клиент собраний локально. Для этого перейдите в каталог корневого уровня репозитория и выполните следующую команду:
+    
+        $ npm install && npm run build && npm run start
+        
+## Очистка
+
+    Чтобы избежать непредвиденных расходов в результате развертывания демонстрационного приложения, важно удалить все ресурсы в вашей учетной записи AWS, 
+    которые вы не используете.
+
+    Когда вы впервые вызвали 'amplify init', вы создали локальную среду Amplify. Вы можете иметь несколько окружений на вашем аккаунте AWS, 
+    но вызов 'amplify remove <category>' удаляет соответствующие ресурсы в вашем локальном окружении Amplify.
+    
+        $ amplify remove { api | function }
+        
+    Удаление категории в локальной среде Amplify не влияет на ресурсы, созданные в облаке. После удаления категории локально, удалите ресурсы из учетной записи AWS, 
+    опубликовав эти изменения в облаке:
+    
+        $ amplify push
+        
+    Кроме того, вы можете очистить всю среду Amplify в облаке и все локальные файлы, созданные Amplify, выполнив команду:
+    
+        $ amplify delete
