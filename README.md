@@ -110,7 +110,7 @@
        Отправка формы вызывает API для создания или присоединения к существующей встрече с использованием данных из формы. Tдержатель функции joinMeeting будет 
        будет заменено на следующем шаге. Скопируйте следующий код в ./src/components/MeetingForm.tsx:
        
-       import React, { ChangeEvent, FC, FormEvent, useState } from 'react';
+        import React, { ChangeEvent, FC, FormEvent, useState } from 'react';
 
         import {
           Flex,
